@@ -178,6 +178,29 @@ body{font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--text)
 .sig-clear{position:absolute;top:8px;right:8px;padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:.7rem;font-weight:600;cursor:pointer;color:var(--text2);font-family:inherit}
 .sig-clear:hover{border-color:var(--red);color:var(--red)}
 
+/* EDIT PDF TABS */
+.edit-tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:.8rem}
+.edit-tab{padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);color:var(--text2);font-family:inherit;font-size:.72rem;cursor:pointer;transition:all .2s;font-weight:600;display:flex;align-items:center;gap:5px}
+.edit-tab:hover{border-color:var(--accent);color:var(--text)}
+.edit-tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.edit-tab .etab-icon{font-size:.85rem}
+.edit-panel{display:none}.edit-panel.active{display:block}
+.draw-canvas-wrap{border:2px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-top:.5rem;background:#fff;position:relative}
+.draw-canvas-wrap canvas{display:block;width:100%;height:260px;cursor:crosshair}
+.draw-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:.5rem;flex-wrap:wrap}
+.draw-toolbar label{font-size:.74rem;color:var(--text2);font-weight:600}
+.draw-toolbar input,.draw-toolbar select{padding:4px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;font-size:.76rem;font-family:inherit}
+.draw-clear{padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:.7rem;font-weight:600;cursor:pointer;color:var(--text2);font-family:inherit}
+.draw-clear:hover{border-color:var(--red);color:var(--red)}
+.stamp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;margin-bottom:.6rem}
+.stamp-item{padding:10px 8px;border:2px solid var(--border);border-radius:var(--radius-sm);text-align:center;cursor:pointer;transition:all .2s;font-weight:700;font-size:.75rem;background:var(--surface)}
+.stamp-item:hover{border-color:var(--accent);background:var(--accent-soft)}
+.stamp-item.selected{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.img-preview-wrap{margin-top:.5rem;text-align:center}
+.img-preview-wrap img{max-width:200px;max-height:150px;border:1px solid var(--border);border-radius:8px}
+.color-input-wrap{display:flex;align-items:center;gap:6px}
+.color-input-wrap input[type="color"]{width:32px;height:28px;padding:0;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:none}
+
 /* COMPARE SIDE BY SIDE */
 .compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:.8rem}
 .compare-col{text-align:center}
@@ -279,7 +302,7 @@ const TOOLS=[
   {id:'repair',name:'Repair PDF',cat:'optimize',icon:'🔧',c:'#ca8a04',desc:'Fix damaged PDFs by reloading and re-saving.',accept:'.pdf'},
 
   // EDIT
-  {id:'edit',name:'Edit PDF',cat:'edit',icon:'✏️',c:'#d94f00',desc:'Add text overlays and annotations on pages.',accept:'.pdf'},
+  {id:'edit',name:'Edit PDF',cat:'edit',icon:'✏️',c:'#d94f00',desc:'Add text, images, shapes, drawings, highlights, stamps & notes.',accept:'.pdf'},
   {id:'watermark',name:'Add Watermark',cat:'edit',icon:'💧',c:'#0891b2',desc:'Stamp text watermarks with custom style.',accept:'.pdf'},
   {id:'pagenums',name:'Page Numbers',cat:'edit',icon:'🔢',c:'#7c3aed',desc:'Add page numbers with position and format control.',accept:'.pdf'},
   {id:'crop',name:'Crop PDF',cat:'edit',icon:'🔲',c:'#ca8a04',desc:'Adjust margins and crop box for all pages.',accept:'.pdf'},
@@ -296,6 +319,7 @@ const TOOLS=[
 // ====================================================================
 let curTool=null, files=[], resultBytes=null, resultBlobs=null, pdfPageCount=0;
 let organizeOrder=[], signatureDataURL=null;
+let editImageDataURL=null, drawCanvasDataURL=null, currentEditTab='text';
 
 // ====================================================================
 // RENDER
@@ -333,6 +357,7 @@ function filterBySearch(q){
 function openTool(id){
   curTool=TOOLS.find(t=>t.id===id); if(!curTool)return;
   files=[];resultBytes=null;resultBlobs=null;pdfPageCount=0;organizeOrder=[];signatureDataURL=null;
+  editImageDataURL=null;drawCanvasDataURL=null;currentEditTab='text';
   document.getElementById('mIcon').textContent=curTool.icon;
   document.getElementById('mTitle').textContent=curTool.name;
   document.getElementById('overlay').classList.add('open');
@@ -385,7 +410,7 @@ const ACT_LABELS={merge:'Merge PDFs',split:'Split PDF',extract:'Extract Pages',r
   pagenums:'Add Numbers',protect:'Encrypt PDF',unlock:'Unlock PDF',img2pdf:'Create PDF',
   pdf2img:'Convert to Images',ocr:'Run OCR',word2pdf:'Convert to PDF',excel2pdf:'Convert to PDF',
   html2pdf:'Generate PDF',ppt2pdf:'Generate PDF',pdf2text:'Extract Text',pdf2csv:'Export CSV',
-  pdf2pdfa:'Convert to PDF/A',repair:'Repair PDF',edit:'Add Text & Save',crop:'Crop & Save',
+  pdf2pdfa:'Convert to PDF/A',repair:'Repair PDF',edit:'Apply Edits & Save',crop:'Crop & Save',
   sign:'Sign & Save',redact:'Redact & Save'};
 function getActLabel(t){return ACT_LABELS[t.id]||'Process'}
 
@@ -588,22 +613,172 @@ function getOptsHTML(id){
       <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.78rem;margin-bottom:.4rem"><input type="checkbox" id="repairCompress" checked> Re-compress with object streams</label>
       <p style="font-size:.76rem;color:var(--text2);margin-top:.4rem">Loads the PDF with error tolerance, rebuilds internal structure, and saves a clean copy. A diagnostic report will be shown after repair.</p></div>`,
 
-    edit:`<div class="opts"><h4>Add Text Annotation</h4>
-      <div class="inp-group"><label>Text to add (supports multiple lines)</label><textarea id="editText" style="min-height:50px" placeholder="Your text here...">APPROVED</textarea></div>
-      <div class="inp-row">
-        <div class="inp-group"><label>Font</label><select id="editFont"><option value="HelveticaBold" selected>Helvetica Bold</option><option value="Helvetica">Helvetica</option><option value="TimesRoman">Times Roman</option><option value="TimesRomanBold">Times Bold</option><option value="Courier">Courier</option><option value="CourierBold">Courier Bold</option></select></div>
-        <div class="inp-group"><label>Font Size</label><select id="editSize"><option value="10">10pt</option><option value="14">14pt</option><option value="20" selected>20pt</option><option value="30">30pt</option><option value="48">48pt</option><option value="72">72pt</option></select></div>
+    edit:`<div class="opts"><h4>PDF Editor</h4>
+      <div class="edit-tabs">
+        <button class="edit-tab active" onclick="switchEditTab('text',this)"><span class="etab-icon">T</span> Text</button>
+        <button class="edit-tab" onclick="switchEditTab('image',this)"><span class="etab-icon">🖼</span> Image</button>
+        <button class="edit-tab" onclick="switchEditTab('shapes',this)"><span class="etab-icon">⬜</span> Shapes</button>
+        <button class="edit-tab" onclick="switchEditTab('drawing',this)"><span class="etab-icon">✏</span> Drawing</button>
+        <button class="edit-tab" onclick="switchEditTab('highlight',this)"><span class="etab-icon">🖍</span> Highlight</button>
+        <button class="edit-tab" onclick="switchEditTab('stamps',this)"><span class="etab-icon">📌</span> Stamps</button>
+        <button class="edit-tab" onclick="switchEditTab('notes',this)"><span class="etab-icon">📝</span> Notes</button>
       </div>
-      <div class="inp-row">
-        <div class="inp-group"><label>Color</label><select id="editColor"><option value="red">Red</option><option value="blue">Blue</option><option value="green">Green</option><option value="black" selected>Black</option><option value="gray">Gray</option><option value="white">White</option><option value="orange">Orange</option></select></div>
-        <div class="inp-group"><label>Rotation (degrees)</label><input type="number" id="editRotation" value="0" min="-180" max="180"></div>
+
+      <!-- TEXT PANEL -->
+      <div class="edit-panel active" id="editPanelText">
+        <div class="inp-group"><label>Text to add (supports multiple lines)</label><textarea id="editText" style="min-height:50px" placeholder="Your text here...">APPROVED</textarea></div>
+        <div class="inp-row">
+          <div class="inp-group"><label>Font</label><select id="editFont"><option value="HelveticaBold" selected>Helvetica Bold</option><option value="Helvetica">Helvetica</option><option value="TimesRoman">Times Roman</option><option value="TimesRomanBold">Times Bold</option><option value="Courier">Courier</option><option value="CourierBold">Courier Bold</option></select></div>
+          <div class="inp-group"><label>Font Size</label><select id="editSize"><option value="10">10pt</option><option value="14">14pt</option><option value="20" selected>20pt</option><option value="30">30pt</option><option value="48">48pt</option><option value="72">72pt</option></select></div>
+        </div>
+        <div class="inp-row">
+          <div class="inp-group"><label>Color</label><select id="editColor"><option value="red">Red</option><option value="blue">Blue</option><option value="green">Green</option><option value="black" selected>Black</option><option value="gray">Gray</option><option value="white">White</option><option value="orange">Orange</option></select></div>
+          <div class="inp-group"><label>Rotation (degrees)</label><input type="number" id="editRotation" value="0" min="-180" max="180"></div>
+        </div>
+        <div class="inp-row">
+          <div class="inp-group"><label>X Position (pt from left)</label><input type="number" id="editX" value="50" min="0"></div>
+          <div class="inp-group"><label>Y Position (pt from bottom)</label><input type="number" id="editY" value="50" min="0"></div>
+        </div>
+        <div class="range-row"><label>Opacity</label><input type="range" id="editOpacity" min="10" max="100" value="100" oninput="this.nextElementSibling.textContent=this.value+'%'"><span class="range-val">100%</span></div>
+        <div class="inp-group"><label>Apply to pages (blank = first page only)</label><input type="text" id="editPages" placeholder="e.g. 1-3 or blank for page 1"></div>
       </div>
-      <div class="inp-row">
-        <div class="inp-group"><label>X Position (pt from left)</label><input type="number" id="editX" value="50" min="0"></div>
-        <div class="inp-group"><label>Y Position (pt from bottom)</label><input type="number" id="editY" value="50" min="0"></div>
+
+      <!-- IMAGE PANEL -->
+      <div class="edit-panel" id="editPanelImage">
+        <div class="inp-group"><label>Upload an image (JPG/PNG)</label>
+          <input type="file" id="editImgFile" accept="image/jpeg,image/png" onchange="previewEditImage(this)" style="padding:6px">
+        </div>
+        <div class="img-preview-wrap" id="editImgPreview"></div>
+        <div class="inp-row">
+          <div class="inp-group"><label>X Position (pt from left)</label><input type="number" id="editImgX" value="50" min="0"></div>
+          <div class="inp-group"><label>Y Position (pt from bottom)</label><input type="number" id="editImgY" value="50" min="0"></div>
+        </div>
+        <div class="inp-row">
+          <div class="inp-group"><label>Width (pt, 0 = auto)</label><input type="number" id="editImgW" value="200" min="0"></div>
+          <div class="inp-group"><label>Height (pt, 0 = auto)</label><input type="number" id="editImgH" value="0" min="0"></div>
+        </div>
+        <div class="range-row"><label>Opacity</label><input type="range" id="editImgOpacity" min="10" max="100" value="100" oninput="this.nextElementSibling.textContent=this.value+'%'"><span class="range-val">100%</span></div>
+        <div class="inp-group"><label>Apply to pages (blank = first page only)</label><input type="text" id="editImgPages" placeholder="e.g. 1-3 or blank for page 1"></div>
       </div>
-      <div class="range-row"><label>Opacity</label><input type="range" id="editOpacity" min="10" max="100" value="100" oninput="this.nextElementSibling.textContent=this.value+'%'"><span class="range-val">100%</span></div>
-      <div class="inp-group"><label>Apply to pages (blank = first page only)</label><input type="text" id="editPages" placeholder="e.g. 1-3 or blank for page 1"></div></div>`,
+
+      <!-- SHAPES PANEL -->
+      <div class="edit-panel" id="editPanelShapes">
+        <div class="opt-row" style="margin-bottom:8px">
+          <button class="opt-btn on" data-val="rectangle" onclick="pickOpt(this)">Rectangle</button>
+          <button class="opt-btn" data-val="ellipse" onclick="pickOpt(this)">Ellipse</button>
+          <button class="opt-btn" data-val="line" onclick="pickOpt(this)">Line</button>
+        </div>
+        <div class="inp-row">
+          <div class="inp-group"><label>X Position</label><input type="number" id="shapeX" value="50" min="0"></div>
+          <div class="inp-group"><label>Y Position</label><input type="number" id="shapeY" value="50" min="0"></div>
+        </div>
+        <div class="inp-row">
+          <div class="inp-group"><label>Width / Length</label><input type="number" id="shapeW" value="200" min="1"></div>
+          <div class="inp-group"><label>Height</label><input type="number" id="shapeH" value="100" min="1"></div>
+        </div>
+        <div class="inp-row">
+          <div class="inp-group"><label>Border Color</label>
+            <div class="color-input-wrap"><input type="color" id="shapeBorderColor" value="#d94f00"><select id="shapeBorderStyle"><option value="solid">Solid</option><option value="none">None</option></select></div>
+          </div>
+          <div class="inp-group"><label>Fill Color</label>
+            <div class="color-input-wrap"><input type="color" id="shapeFillColor" value="#ffffff"><select id="shapeFillStyle"><option value="solid">Solid</option><option value="none">None (Outline only)</option></select></div>
+          </div>
+        </div>
+        <div class="inp-row">
+          <div class="inp-group"><label>Border Thickness</label><input type="number" id="shapeBorderW" value="2" min="0" max="20"></div>
+          <div class="inp-group"><label>Rotation (degrees)</label><input type="number" id="shapeRotation" value="0" min="-180" max="180"></div>
+        </div>
+        <div class="range-row"><label>Opacity</label><input type="range" id="shapeOpacity" min="0" max="100" value="100" oninput="this.nextElementSibling.textContent=this.value+'%'"><span class="range-val">100%</span></div>
+        <div class="inp-group"><label>Apply to pages (blank = first page only)</label><input type="text" id="shapePages" placeholder="e.g. 1-3 or blank for page 1"></div>
+      </div>
+
+      <!-- DRAWING PANEL -->
+      <div class="edit-panel" id="editPanelDrawing">
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:.5rem">Use the canvas below to draw freehand. Your drawing will be placed onto the PDF page.</p>
+        <div class="draw-toolbar">
+          <label>Color:</label><input type="color" id="drawColor" value="#d94f00">
+          <label>Thickness:</label><input type="number" id="drawThickness" value="3" min="1" max="20" style="width:55px">
+          <button class="draw-clear" onclick="clearDrawCanvas()">Clear</button>
+        </div>
+        <div class="draw-canvas-wrap"><canvas id="drawCanvas" width="660" height="260"></canvas></div>
+        <div class="inp-row" style="margin-top:.6rem">
+          <div class="inp-group"><label>X Offset (pt from left)</label><input type="number" id="drawX" value="0" min="0"></div>
+          <div class="inp-group"><label>Y Offset (pt from bottom)</label><input type="number" id="drawY" value="0" min="0"></div>
+        </div>
+        <div class="range-row"><label>Scale</label><input type="range" id="drawScale" min="20" max="200" value="100" oninput="this.nextElementSibling.textContent=this.value+'%'"><span class="range-val">100%</span></div>
+        <div class="inp-group"><label>Apply to pages (blank = first page only)</label><input type="text" id="drawPages" placeholder="e.g. 1-3 or blank for page 1"></div>
+      </div>
+
+      <!-- HIGHLIGHT PANEL -->
+      <div class="edit-panel" id="editPanelHighlight">
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:.5rem">Draw a semi-transparent colored rectangle to highlight an area. Great for emphasizing text or sections.</p>
+        <div class="inp-row">
+          <div class="inp-group"><label>Highlight Color</label><input type="color" id="hlColor" value="#ffff00"></div>
+          <div class="inp-group"><label>Style</label><select id="hlStyle"><option value="highlight" selected>Highlight</option><option value="underline">Underline</option><option value="strikethrough">Strikethrough</option></select></div>
+        </div>
+        <div class="inp-row">
+          <div class="inp-group"><label>X Position</label><input type="number" id="hlX" value="50" min="0"></div>
+          <div class="inp-group"><label>Y Position</label><input type="number" id="hlY" value="400" min="0"></div>
+        </div>
+        <div class="inp-row">
+          <div class="inp-group"><label>Width</label><input type="number" id="hlW" value="300" min="1"></div>
+          <div class="inp-group"><label>Height</label><input type="number" id="hlH" value="16" min="1"></div>
+        </div>
+        <div class="range-row"><label>Opacity</label><input type="range" id="hlOpacity" min="10" max="100" value="40" oninput="this.nextElementSibling.textContent=this.value+'%'"><span class="range-val">40%</span></div>
+        <div class="inp-group"><label>Apply to pages (blank = first page only)</label><input type="text" id="hlPages" placeholder="e.g. 1-3 or blank for page 1"></div>
+      </div>
+
+      <!-- STAMPS PANEL -->
+      <div class="edit-panel" id="editPanelStamps">
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:.5rem">Select a pre-made stamp to place on your document.</p>
+        <div class="stamp-grid" id="stampGrid">
+          <div class="stamp-item selected" onclick="selectStamp(this)" data-stamp="APPROVED" style="color:#1a8c5a;border-color:#1a8c5a33">✓ APPROVED</div>
+          <div class="stamp-item" onclick="selectStamp(this)" data-stamp="REJECTED" style="color:#dc2626">✗ REJECTED</div>
+          <div class="stamp-item" onclick="selectStamp(this)" data-stamp="DRAFT" style="color:#ca8a04">⚠ DRAFT</div>
+          <div class="stamp-item" onclick="selectStamp(this)" data-stamp="CONFIDENTIAL" style="color:#dc2626">🔒 CONFIDENTIAL</div>
+          <div class="stamp-item" onclick="selectStamp(this)" data-stamp="REVIEWED" style="color:#2563eb">✓ REVIEWED</div>
+          <div class="stamp-item" onclick="selectStamp(this)" data-stamp="FINAL" style="color:#1a8c5a">★ FINAL</div>
+          <div class="stamp-item" onclick="selectStamp(this)" data-stamp="COPY" style="color:#7c3aed">⊕ COPY</div>
+          <div class="stamp-item" onclick="selectStamp(this)" data-stamp="VOID" style="color:#dc2626">⊘ VOID</div>
+          <div class="stamp-item" onclick="selectStamp(this)" data-stamp="URGENT" style="color:#d94f00">⚡ URGENT</div>
+          <div class="stamp-item" onclick="selectStamp(this)" data-stamp="SIGNED" style="color:#2563eb">✍ SIGNED</div>
+          <div class="stamp-item" onclick="selectStamp(this)" data-stamp="NOT FOR DISTRIBUTION" style="color:#7c3aed">🚫 NOT FOR DISTRIBUTION</div>
+          <div class="stamp-item" onclick="selectStamp(this)" data-stamp="FOR REVIEW" style="color:#ca8a04">👁 FOR REVIEW</div>
+        </div>
+        <div class="inp-group"><label>Custom Stamp Text (overrides selection)</label><input type="text" id="stampCustom" placeholder="Leave blank to use selected stamp"></div>
+        <div class="inp-row">
+          <div class="inp-group"><label>Stamp Color</label><input type="color" id="stampColor" value="#dc2626"></div>
+          <div class="inp-group"><label>Font Size</label><select id="stampSize"><option value="24">24pt</option><option value="32">32pt</option><option value="48" selected>48pt</option><option value="64">64pt</option><option value="80">80pt</option></select></div>
+        </div>
+        <div class="inp-row">
+          <div class="inp-group"><label>X Position</label><input type="number" id="stampX" value="150" min="0"></div>
+          <div class="inp-group"><label>Y Position</label><input type="number" id="stampY" value="400" min="0"></div>
+        </div>
+        <div class="inp-row">
+          <div class="inp-group"><label>Rotation (degrees)</label><input type="number" id="stampRotation" value="-30" min="-180" max="180"></div>
+          <div class="inp-group"><label>Border</label><select id="stampBorder"><option value="yes" selected>With Border</option><option value="no">No Border</option></select></div>
+        </div>
+        <div class="range-row"><label>Opacity</label><input type="range" id="stampOpacity" min="10" max="100" value="60" oninput="this.nextElementSibling.textContent=this.value+'%'"><span class="range-val">60%</span></div>
+        <div class="inp-group"><label>Apply to pages (blank = first page only)</label><input type="text" id="stampPages" placeholder="e.g. 1-3 or blank for page 1"></div>
+      </div>
+
+      <!-- NOTES PANEL -->
+      <div class="edit-panel" id="editPanelNotes">
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:.5rem">Add a sticky note annotation icon with a text label. The note icon will be placed on the page with your comment displayed next to it.</p>
+        <div class="inp-group"><label>Note text</label><textarea id="noteText" style="min-height:50px" placeholder="Enter your comment or note...">Please review this section.</textarea></div>
+        <div class="inp-row">
+          <div class="inp-group"><label>Note Color</label><select id="noteColor"><option value="yellow" selected>Yellow</option><option value="blue">Blue</option><option value="green">Green</option><option value="pink">Pink</option><option value="orange">Orange</option></select></div>
+          <div class="inp-group"><label>Font Size</label><select id="noteSize"><option value="8">8pt</option><option value="10" selected>10pt</option><option value="12">12pt</option><option value="14">14pt</option></select></div>
+        </div>
+        <div class="inp-row">
+          <div class="inp-group"><label>X Position</label><input type="number" id="noteX" value="50" min="0"></div>
+          <div class="inp-group"><label>Y Position</label><input type="number" id="noteY" value="700" min="0"></div>
+        </div>
+        <div class="range-row"><label>Opacity</label><input type="range" id="noteOpacity" min="10" max="100" value="90" oninput="this.nextElementSibling.textContent=this.value+'%'"><span class="range-val">90%</span></div>
+        <div class="inp-group"><label>Apply to pages (blank = first page only)</label><input type="text" id="notePages" placeholder="e.g. 1-3 or blank for page 1"></div>
+      </div>
+
+    </div>`,
 
     crop:`<div class="opts"><h4>Crop Margins (points to trim)</h4>
       <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
@@ -812,6 +987,67 @@ function initSignature(){
 function clearSignature(){
   const canvas=document.getElementById('sigCanvas');if(!canvas)return;
   canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);signatureDataURL=null;
+}
+
+// ---- EDIT PDF HELPERS ----
+function switchEditTab(tab,btn){
+  currentEditTab=tab;
+  document.querySelectorAll('.edit-tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.edit-panel').forEach(p=>p.classList.remove('active'));
+  const panel=document.getElementById('editPanel'+tab.charAt(0).toUpperCase()+tab.slice(1));
+  if(panel)panel.classList.add('active');
+  if(tab==='drawing')initDrawCanvas();
+}
+function previewEditImage(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    editImageDataURL=e.target.result;
+    document.getElementById('editImgPreview').innerHTML='<img src="'+e.target.result+'" alt="Preview">';
+  };
+  reader.readAsDataURL(file);
+}
+function initDrawCanvas(){
+  setTimeout(()=>{
+    const canvas=document.getElementById('drawCanvas');if(!canvas)return;
+    if(canvas._drawInit)return;canvas._drawInit=true;
+    const ctx=canvas.getContext('2d');
+    let drawing=false;
+    canvas.onmousedown=canvas.ontouchstart=e=>{
+      drawing=true;
+      ctx.strokeStyle=document.getElementById('drawColor')?.value||'#d94f00';
+      ctx.lineWidth=parseInt(document.getElementById('drawThickness')?.value||'3');
+      ctx.lineCap='round';ctx.lineJoin='round';
+      const r=canvas.getBoundingClientRect();
+      const x=(e.touches?e.touches[0].clientX:e.clientX)-r.left;
+      const y=(e.touches?e.touches[0].clientY:e.clientY)-r.top;
+      ctx.beginPath();ctx.moveTo(x*(canvas.width/r.width),y*(canvas.height/r.height));
+      e.preventDefault();
+    };
+    canvas.onmousemove=canvas.ontouchmove=e=>{
+      if(!drawing)return;
+      const r=canvas.getBoundingClientRect();
+      const x=(e.touches?e.touches[0].clientX:e.clientX)-r.left;
+      const y=(e.touches?e.touches[0].clientY:e.clientY)-r.top;
+      ctx.lineTo(x*(canvas.width/r.width),y*(canvas.height/r.height));ctx.stroke();
+      e.preventDefault();
+    };
+    canvas.onmouseup=canvas.ontouchend=()=>{drawing=false;drawCanvasDataURL=canvas.toDataURL('image/png')};
+    canvas.onmouseleave=()=>{drawing=false};
+  },100);
+}
+function clearDrawCanvas(){
+  const canvas=document.getElementById('drawCanvas');if(!canvas)return;
+  canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);drawCanvasDataURL=null;
+}
+function selectStamp(el){
+  document.querySelectorAll('.stamp-item').forEach(s=>s.classList.remove('selected'));
+  el.classList.add('selected');
+}
+function hexToRgb01(hex){
+  hex=hex.replace('#','');
+  return{r:parseInt(hex.substring(0,2),16)/255,g:parseInt(hex.substring(2,4),16)/255,b:parseInt(hex.substring(4,6),16)/255};
 }
 
 // ---- DRAG SORT for merge ----
@@ -1622,33 +1858,220 @@ async function doRepair(){
 async function doEdit(){
   setProgress(10,'Loading…');
   const doc=await PDFDocument.load(await files[0].arrayBuffer(),{ignoreEncryption:true});
-  const text=document.getElementById('editText')?.value||'Text';
-  const fs=parseInt(document.getElementById('editSize')?.value||'20');
-  const cMap={red:rgb(.8,.1,.1),blue:rgb(.1,.1,.8),green:rgb(.1,.6,.1),black:rgb(0,0,0),gray:rgb(.5,.5,.5),white:rgb(1,1,1),orange:rgb(.85,.4,0)};
-  const color=cMap[document.getElementById('editColor')?.value]||cMap.black;
-  const px=parseFloat(document.getElementById('editX')?.value||'50');
-  const py=parseFloat(document.getElementById('editY')?.value||'50');
-  const rot=parseInt(document.getElementById('editRotation')?.value||'0');
-  const opacity=parseInt(document.getElementById('editOpacity')?.value||'100')/100;
-  const ps=document.getElementById('editPages')?.value.trim();
   const total=doc.getPageCount();
-  const pages=ps?parsePages(ps,total):[1];
-  const fontName=document.getElementById('editFont')?.value||'HelveticaBold';
-  const font=await doc.embedFont(StandardFonts[fontName]);
-  setProgress(50,'Adding text…');
-  const lines=text.split('\n');
-  pages.forEach(p=>{
-    const pg=doc.getPage(p-1);
-    let curY=py;
-    lines.forEach(line=>{
-      const drawOpts={x:px,y:curY,size:fs,font,color,opacity};
-      if(rot!==0)drawOpts.rotate=degrees(rot);
-      pg.drawText(line,drawOpts);
-      curY-=fs*1.4;
+  const cMap={red:rgb(.8,.1,.1),blue:rgb(.1,.1,.8),green:rgb(.1,.6,.1),black:rgb(0,0,0),gray:rgb(.5,.5,.5),white:rgb(1,1,1),orange:rgb(.85,.4,0)};
+  const tab=currentEditTab;
+
+  if(tab==='text'){
+    // ---- ADD TEXT ----
+    const text=document.getElementById('editText')?.value||'Text';
+    const fs=parseInt(document.getElementById('editSize')?.value||'20');
+    const color=cMap[document.getElementById('editColor')?.value]||cMap.black;
+    const px=parseFloat(document.getElementById('editX')?.value||'50');
+    const py=parseFloat(document.getElementById('editY')?.value||'50');
+    const rot=parseInt(document.getElementById('editRotation')?.value||'0');
+    const opacity=parseInt(document.getElementById('editOpacity')?.value||'100')/100;
+    const ps=document.getElementById('editPages')?.value.trim();
+    const pages=ps?parsePages(ps,total):[1];
+    const fontName=document.getElementById('editFont')?.value||'HelveticaBold';
+    const font=await doc.embedFont(StandardFonts[fontName]);
+    setProgress(50,'Adding text…');
+    const lines=text.split('\n');
+    pages.forEach(p=>{
+      const pg=doc.getPage(p-1);
+      let curY=py;
+      lines.forEach(line=>{
+        const drawOpts={x:px,y:curY,size:fs,font,color,opacity};
+        if(rot!==0)drawOpts.rotate=degrees(rot);
+        pg.drawText(line,drawOpts);
+        curY-=fs*1.4;
+      });
     });
-  });
-  resultBytes=await doc.save();
-  showDone(`Text added to ${pages.length} page(s) — ${fmtSize(resultBytes.length)}`,'edited.pdf');
+    resultBytes=await doc.save();
+    showDone(`Text added to ${pages.length} page(s) — ${fmtSize(resultBytes.length)}`,'edited.pdf');
+
+  }else if(tab==='image'){
+    // ---- ADD IMAGE ----
+    if(!editImageDataURL){toast('Upload an image first');throw Error('No image')}
+    const imgBytes=await fetch(editImageDataURL).then(r=>r.arrayBuffer());
+    const isJpg=editImageDataURL.startsWith('data:image/jpeg');
+    const img=isJpg?await doc.embedJpg(imgBytes):await doc.embedPng(imgBytes);
+    const ix=parseFloat(document.getElementById('editImgX')?.value||'50');
+    const iy=parseFloat(document.getElementById('editImgY')?.value||'50');
+    let iw=parseFloat(document.getElementById('editImgW')?.value||'200');
+    let ih=parseFloat(document.getElementById('editImgH')?.value||'0');
+    const iOpacity=parseInt(document.getElementById('editImgOpacity')?.value||'100')/100;
+    if(iw>0&&ih<=0)ih=iw*(img.height/img.width);
+    else if(ih>0&&iw<=0)iw=ih*(img.width/img.height);
+    else if(iw<=0&&ih<=0){iw=img.width;ih=img.height}
+    const ps=document.getElementById('editImgPages')?.value.trim();
+    const pages=ps?parsePages(ps,total):[1];
+    setProgress(50,'Placing image…');
+    pages.forEach(p=>{
+      const pg=doc.getPage(p-1);
+      pg.drawImage(img,{x:ix,y:iy,width:iw,height:ih,opacity:iOpacity});
+    });
+    resultBytes=await doc.save();
+    showDone(`Image placed on ${pages.length} page(s) — ${fmtSize(resultBytes.length)}`,'edited.pdf');
+
+  }else if(tab==='shapes'){
+    // ---- ADD SHAPES ----
+    const shape=document.querySelector('#editPanelShapes .opt-btn.on')?.dataset.val||'rectangle';
+    const sx=parseFloat(document.getElementById('shapeX')?.value||'50');
+    const sy=parseFloat(document.getElementById('shapeY')?.value||'50');
+    const sw=parseFloat(document.getElementById('shapeW')?.value||'200');
+    const sh=parseFloat(document.getElementById('shapeH')?.value||'100');
+    const borderW=parseFloat(document.getElementById('shapeBorderW')?.value||'2');
+    const sRot=parseInt(document.getElementById('shapeRotation')?.value||'0');
+    const sOpacity=parseInt(document.getElementById('shapeOpacity')?.value||'100')/100;
+    const borderStyle=document.getElementById('shapeBorderStyle')?.value||'solid';
+    const fillStyle=document.getElementById('shapeFillStyle')?.value||'solid';
+    const bc=hexToRgb01(document.getElementById('shapeBorderColor')?.value||'#d94f00');
+    const fc=hexToRgb01(document.getElementById('shapeFillColor')?.value||'#ffffff');
+    const borderColor=borderStyle!=='none'?rgb(bc.r,bc.g,bc.b):undefined;
+    const fillColor=fillStyle!=='none'?rgb(fc.r,fc.g,fc.b):undefined;
+    const ps=document.getElementById('shapePages')?.value.trim();
+    const pages=ps?parsePages(ps,total):[1];
+    setProgress(50,'Drawing shapes…');
+    pages.forEach(p=>{
+      const pg=doc.getPage(p-1);
+      const opts={x:sx,y:sy,opacity:sOpacity};
+      if(sRot!==0)opts.rotate=degrees(sRot);
+      if(shape==='rectangle'){
+        opts.width=sw;opts.height=sh;
+        if(fillColor)opts.color=fillColor;
+        if(borderColor){opts.borderColor=borderColor;opts.borderWidth=borderW}
+        pg.drawRectangle(opts);
+      }else if(shape==='ellipse'){
+        opts.xScale=sw/2;opts.yScale=sh/2;
+        opts.x=sx+sw/2;opts.y=sy+sh/2;
+        if(fillColor)opts.color=fillColor;
+        if(borderColor){opts.borderColor=borderColor;opts.borderWidth=borderW}
+        pg.drawEllipse(opts);
+      }else if(shape==='line'){
+        pg.drawLine({start:{x:sx,y:sy},end:{x:sx+sw,y:sy+sh},thickness:borderW,color:borderColor||rgb(0,0,0),opacity:sOpacity});
+      }
+    });
+    resultBytes=await doc.save();
+    showDone(`${shape} added to ${pages.length} page(s) — ${fmtSize(resultBytes.length)}`,'edited.pdf');
+
+  }else if(tab==='drawing'){
+    // ---- FREEHAND DRAWING ----
+    if(!drawCanvasDataURL){toast('Draw something on the canvas first');throw Error('No drawing')}
+    setProgress(30,'Embedding drawing…');
+    const pngBytes=await fetch(drawCanvasDataURL).then(r=>r.arrayBuffer());
+    const drawImg=await doc.embedPng(pngBytes);
+    const dx=parseFloat(document.getElementById('drawX')?.value||'0');
+    const dy=parseFloat(document.getElementById('drawY')?.value||'0');
+    const scale=parseInt(document.getElementById('drawScale')?.value||'100')/100;
+    const ps=document.getElementById('drawPages')?.value.trim();
+    const pages=ps?parsePages(ps,total):[1];
+    setProgress(50,'Placing drawing…');
+    pages.forEach(p=>{
+      const pg=doc.getPage(p-1);
+      const{width:pw}=pg.getSize();
+      const dw=pw*scale;const dh=dw*(drawImg.height/drawImg.width);
+      pg.drawImage(drawImg,{x:dx,y:dy,width:dw,height:dh});
+    });
+    resultBytes=await doc.save();
+    showDone(`Drawing placed on ${pages.length} page(s) — ${fmtSize(resultBytes.length)}`,'edited.pdf');
+
+  }else if(tab==='highlight'){
+    // ---- HIGHLIGHT / UNDERLINE / STRIKETHROUGH ----
+    const style=document.getElementById('hlStyle')?.value||'highlight';
+    const hc=hexToRgb01(document.getElementById('hlColor')?.value||'#ffff00');
+    const hx=parseFloat(document.getElementById('hlX')?.value||'50');
+    const hy=parseFloat(document.getElementById('hlY')?.value||'400');
+    const hw=parseFloat(document.getElementById('hlW')?.value||'300');
+    let hh=parseFloat(document.getElementById('hlH')?.value||'16');
+    const hOpacity=parseInt(document.getElementById('hlOpacity')?.value||'40')/100;
+    const ps=document.getElementById('hlPages')?.value.trim();
+    const pages=ps?parsePages(ps,total):[1];
+    setProgress(50,'Adding highlights…');
+    pages.forEach(p=>{
+      const pg=doc.getPage(p-1);
+      if(style==='highlight'){
+        pg.drawRectangle({x:hx,y:hy,width:hw,height:hh,color:rgb(hc.r,hc.g,hc.b),opacity:hOpacity});
+      }else if(style==='underline'){
+        pg.drawLine({start:{x:hx,y:hy},end:{x:hx+hw,y:hy},thickness:2,color:rgb(hc.r,hc.g,hc.b),opacity:hOpacity});
+      }else if(style==='strikethrough'){
+        const midY=hy+hh/2;
+        pg.drawLine({start:{x:hx,y:midY},end:{x:hx+hw,y:midY},thickness:2,color:rgb(hc.r,hc.g,hc.b),opacity:hOpacity});
+      }
+    });
+    resultBytes=await doc.save();
+    showDone(`${style} added to ${pages.length} page(s) — ${fmtSize(resultBytes.length)}`,'edited.pdf');
+
+  }else if(tab==='stamps'){
+    // ---- STAMPS ----
+    const customText=document.getElementById('stampCustom')?.value.trim();
+    const selectedStamp=document.querySelector('.stamp-item.selected')?.dataset.stamp||'APPROVED';
+    const stampText=customText||selectedStamp;
+    const sc=hexToRgb01(document.getElementById('stampColor')?.value||'#dc2626');
+    const stampSize=parseInt(document.getElementById('stampSize')?.value||'48');
+    const sx=parseFloat(document.getElementById('stampX')?.value||'150');
+    const sy=parseFloat(document.getElementById('stampY')?.value||'400');
+    const sRot=parseInt(document.getElementById('stampRotation')?.value||'-30');
+    const sOpacity=parseInt(document.getElementById('stampOpacity')?.value||'60')/100;
+    const hasBorder=document.getElementById('stampBorder')?.value==='yes';
+    const ps=document.getElementById('stampPages')?.value.trim();
+    const pages=ps?parsePages(ps,total):[1];
+    const font=await doc.embedFont(StandardFonts.HelveticaBold);
+    setProgress(50,'Applying stamps…');
+    const stampColor=rgb(sc.r,sc.g,sc.b);
+    pages.forEach(p=>{
+      const pg=doc.getPage(p-1);
+      const tw=font.widthOfTextAtSize(stampText,stampSize);
+      const th=stampSize;
+      if(hasBorder){
+        const pad=stampSize*0.4;
+        const borderOpts={x:sx-pad,y:sy-pad*0.3,width:tw+pad*2,height:th+pad*0.6,borderColor:stampColor,borderWidth:Math.max(2,stampSize/12),opacity:sOpacity};
+        if(sRot!==0)borderOpts.rotate=degrees(sRot);
+        pg.drawRectangle(borderOpts);
+      }
+      const textOpts={x:sx,y:sy,size:stampSize,font,color:stampColor,opacity:sOpacity};
+      if(sRot!==0)textOpts.rotate=degrees(sRot);
+      pg.drawText(stampText,textOpts);
+    });
+    resultBytes=await doc.save();
+    showDone(`"${stampText}" stamp on ${pages.length} page(s) — ${fmtSize(resultBytes.length)}`,'edited.pdf');
+
+  }else if(tab==='notes'){
+    // ---- STICKY NOTES ----
+    const noteText=document.getElementById('noteText')?.value||'Note';
+    const noteColorMap={yellow:{bg:rgb(1,.98,.8),border:rgb(.9,.85,.4),icon:rgb(.85,.75,.1)},blue:{bg:rgb(.88,.93,1),border:rgb(.4,.6,.9),icon:rgb(.2,.4,.85)},green:{bg:rgb(.88,1,.9),border:rgb(.3,.75,.4),icon:rgb(.1,.6,.2)},pink:{bg:rgb(1,.9,.95),border:rgb(.9,.4,.6),icon:rgb(.85,.15,.45)},orange:{bg:rgb(1,.95,.88),border:rgb(.9,.65,.3),icon:rgb(.85,.5,.05)}};
+    const nc=noteColorMap[document.getElementById('noteColor')?.value]||noteColorMap.yellow;
+    const noteSize=parseInt(document.getElementById('noteSize')?.value||'10');
+    const nx=parseFloat(document.getElementById('noteX')?.value||'50');
+    const ny=parseFloat(document.getElementById('noteY')?.value||'700');
+    const nOpacity=parseInt(document.getElementById('noteOpacity')?.value||'90')/100;
+    const ps=document.getElementById('notePages')?.value.trim();
+    const pages=ps?parsePages(ps,total):[1];
+    const font=await doc.embedFont(StandardFonts.Helvetica);
+    const boldFont=await doc.embedFont(StandardFonts.HelveticaBold);
+    setProgress(50,'Adding notes…');
+    pages.forEach(p=>{
+      const pg=doc.getPage(p-1);
+      const lines=noteText.split('\n');
+      const maxLineW=Math.max(...lines.map(l=>font.widthOfTextAtSize(l,noteSize)));
+      const pad=8;const iconSize=18;
+      const boxW=maxLineW+pad*2+iconSize+6;
+      const boxH=lines.length*noteSize*1.4+pad*2;
+      // Note background
+      pg.drawRectangle({x:nx,y:ny-boxH,width:boxW,height:boxH,color:nc.bg,borderColor:nc.border,borderWidth:1,opacity:nOpacity});
+      // Note icon (small square)
+      pg.drawRectangle({x:nx+pad-2,y:ny-iconSize-pad+2,width:iconSize,height:iconSize,color:nc.icon,opacity:nOpacity});
+      pg.drawText('📝',{x:nx+pad,y:ny-iconSize-pad+5,size:10,font:boldFont,color:rgb(1,1,1),opacity:nOpacity});
+      // Note text
+      let textY=ny-pad-noteSize;
+      lines.forEach(line=>{
+        pg.drawText(line,{x:nx+pad+iconSize+6,y:textY,size:noteSize,font,color:rgb(.15,.15,.15),opacity:nOpacity});
+        textY-=noteSize*1.4;
+      });
+    });
+    resultBytes=await doc.save();
+    showDone(`Note added to ${pages.length} page(s) — ${fmtSize(resultBytes.length)}`,'edited.pdf');
+  }
 }
 
 // ---- CROP ----
