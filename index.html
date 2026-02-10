@@ -217,7 +217,7 @@ body{font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--text)
 .ve-rh-bl{bottom:-5px;left:-5px;cursor:sw-resize}
 .ve-rh-tr{top:-5px;right:-5px;cursor:ne-resize}
 .ve-rh-tl{top:-5px;left:-5px;cursor:nw-resize}
-.ve-annot-text{padding:4px 6px;outline:none;min-width:40px;min-height:20px;white-space:pre-wrap;word-break:break-word;line-height:1.4;font-family:inherit}
+.ve-annot-text{padding:4px 6px;outline:none;min-width:40px;min-height:20px;white-space:pre-wrap;word-break:break-word;line-height:1.4;font-family:inherit;user-select:text;pointer-events:auto;cursor:text}
 .ve-annot-img{width:100%;height:100%;object-fit:contain;pointer-events:none}
 .ve-hl-rect{position:absolute;pointer-events:all;z-index:12;cursor:move;border-radius:2px}
 .ve-hl-rect:hover{outline:1px dashed rgba(255,255,255,.4)}
@@ -2105,8 +2105,11 @@ const VE=(function(){
 
   function onAnnotMouseDown(e,a){
     if(tool!=='select'&&tool!=='text'&&!['rect','ellipse','line','arrow','highlight'].includes(tool))return;
-    e.preventDefault();e.stopPropagation();selectAnnot(a.id);
+    const isTextEdit=e.target.classList.contains('ve-annot-text')||e.target.closest('.ve-annot-text');
+    if(!isTextEdit)e.preventDefault();
+    e.stopPropagation();selectAnnot(a.id);
     const handle=e.target.classList.contains('ve-rh')?e.target.className.match(/ve-rh-(\w+)/)?.[1]:null;
+    if(isTextEdit&&!handle)return;
     dragSt={type:handle?'resize':'move',handle,startX:e.clientX,startY:e.clientY,origX:a.x,origY:a.y,origW:a.w,origH:a.h};
     const onMove=ev=>{
       const dx=(ev.clientX-dragSt.startX)/zoom,dy=(ev.clientY-dragSt.startY)/zoom;
