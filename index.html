@@ -243,6 +243,7 @@ canvas.ve-draw.active{display:block;pointer-events:all;cursor:crosshair}
 .ve-pbtn-row{display:flex;gap:5px;margin-bottom:5px}
 .ve-pbtn-sm{flex:1;padding:5px;background:#2b2e38;border:1px solid #3a3e4c;border-radius:6px;color:#a0a5b8;font-family:inherit;font-size:.68rem;font-weight:600;cursor:pointer;transition:all .15s;text-align:center}
 .ve-pbtn-sm:hover{border-color:#4f8cff;color:#4f8cff}
+.ve-pbtn-sm.active{background:#4f8cff;border-color:#4f8cff;color:#fff}
 .ve-elems-hdr{padding:10px 14px;font-size:.7rem;font-weight:700;color:#6b7089;text-transform:uppercase;letter-spacing:1px;border-top:1px solid #3a3e4c;border-bottom:1px solid #3a3e4c;margin-top:auto;display:flex;align-items:center;justify-content:space-between}
 .ve-elem-list{max-height:180px;overflow-y:auto;padding:5px}
 .ve-ei{display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:6px;font-size:.71rem;cursor:pointer;transition:all .15s;color:#a0a5b8}
@@ -2044,6 +2045,7 @@ const VE=(function(){
     const a={id,type,page:curPage,x:props.x||80,y:props.y||80,
       w:props.w||(type==='text'?200:150),h:props.h||(type==='text'?36:100),
       text:props.text||'Type here',fontSize:props.fontSize||16,fontFamily:"'Nunito Sans',sans-serif",
+      fontWeight:props.fontWeight||'normal',fontStyle:props.fontStyle||'normal',
       color:props.color||'#000000',bgColor:props.bgColor||'transparent',
       borderColor:props.borderColor||'#000000',borderWidth:props.borderWidth||2,
       opacity:props.opacity||1,imgSrc:props.imgSrc||null,rotation:0,
@@ -2067,6 +2069,7 @@ const VE=(function(){
       if(a.type==='text'){
         const te=document.createElement('div');te.className='ve-annot-text';te.contentEditable=true;
         te.style.fontSize=a.fontSize*zoom+'px';te.style.fontFamily=a.fontFamily;
+        te.style.fontWeight=a.fontWeight||'normal';te.style.fontStyle=a.fontStyle||'normal';
         te.style.color=a.color;te.style.background=a.bgColor;te.textContent=a.text;
         te.oninput=()=>{a.text=te.textContent};
         te.onmousedown=e=>{if(tool==='select'){e.stopPropagation();selectAnnot(a.id)}};
@@ -2086,14 +2089,18 @@ const VE=(function(){
         el.style.background=a.fillColor;el.style.opacity=a.opacity||.35;
       }
       if(a.type!=='highlight'){
-        el.innerHTML+='<div class="ve-rh ve-rh-br"></div><div class="ve-rh ve-rh-bl"></div><div class="ve-rh ve-rh-tr"></div><div class="ve-rh ve-rh-tl"></div>';
+        el.insertAdjacentHTML('beforeend','<div class="ve-rh ve-rh-br"></div><div class="ve-rh ve-rh-bl"></div><div class="ve-rh ve-rh-tr"></div><div class="ve-rh ve-rh-tl"></div>');
       }
       el.onmousedown=e=>onAnnotMouseDown(e,a);
       layer.appendChild(el);
     });
     updateElemList();
   }
-  function selectAnnot(id){selEl=annots[curPage]?.find(a=>a.id===id)||null;renderAnnots();updatePropsPanel()}
+  function selectAnnot(id){
+    const newSel=annots[curPage]?.find(a=>a.id===id)||null;
+    if(selEl?.id===id)return;
+    selEl=newSel;renderAnnots();updatePropsPanel();
+  }
   function deselectAll(){selEl=null;renderAnnots();updatePropsPanel()}
 
   function onAnnotMouseDown(e,a){
@@ -2212,9 +2219,10 @@ const VE=(function(){
     }
     const a=selEl;let h='';
     if(a.type==='text'){
-      h+='<div class="ve-pg"><div class="ve-pg-lbl">Font Size</div><input class="ve-pinp" type="number" value="'+a.fontSize+'" min="8" max="120" onchange="VE.updateProp(\'fontSize\',+this.value)"></div>';
+      h+='<div class="ve-pg"><div class="ve-pg-lbl">Font Size</div><input class="ve-pinp" type="number" value="'+a.fontSize+'" min="7" max="120" onchange="VE.updateProp(\'fontSize\',+this.value)"></div>';
       h+='<div class="ve-pg"><div class="ve-pg-lbl">Font</div><select class="ve-psel" onchange="VE.updateProp(\'fontFamily\',this.value)"><option'+(a.fontFamily.includes('Nunito')?' selected':'')+'>\'Nunito Sans\',sans-serif</option><option value="Arial,sans-serif"'+(a.fontFamily.includes('Arial')?' selected':'')+'>Arial</option><option value="Georgia,serif"'+(a.fontFamily.includes('Georgia')?' selected':'')+'>Georgia</option><option value="\'Courier New\',monospace"'+(a.fontFamily.includes('Courier')?' selected':'')+'>Courier New</option><option value="\'Times New Roman\',serif"'+(a.fontFamily.includes('Times')?' selected':'')+'>Times New Roman</option></select></div>';
-      h+='<div class="ve-pg"><div class="ve-pg-lbl">Text Color</div><div class="ve-pg-row"><div class="ve-pcol"><input type="color" value="'+a.color+'" onchange="VE.updateProp(\'color\',this.value)"></div><input class="ve-pinp" value="'+a.color+'" onchange="VE.updateProp(\'color\',this.value)"></div></div>';
+      h+='<div class="ve-pg"><div class="ve-pg-lbl">Font Style</div><div class="ve-pbtn-row"><button class="ve-pbtn-sm'+(a.fontWeight==='bold'?' active':'')+'" onclick="VE.updateProp(\'fontWeight\',VE.selEl.fontWeight===\'bold\'?\'normal\':\'bold\');" style="font-weight:bold">B</button><button class="ve-pbtn-sm'+(a.fontStyle==='italic'?' active':'')+'" onclick="VE.updateProp(\'fontStyle\',VE.selEl.fontStyle===\'italic\'?\'normal\':\'italic\');" style="font-style:italic">I</button></div></div>';
+      h+='<div class="ve-pg"><div class="ve-pg-lbl">Text Color</div><div class="ve-pg-row"><div class="ve-pcol"><input type="color" value="'+a.color+'" onchange="VE.updateProp(\'color\',this.value)"></div><input class="ve-pinp" value="'+a.color+'" onchange="VE.updateProp(\'color\',this.value)"></div><div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap"><button onclick="VE.updateProp(\'color\',\'#000000\')" style="width:24px;height:24px;background:#000000;border:1px solid #ccc;border-radius:3px;cursor:pointer"></button><button onclick="VE.updateProp(\'color\',\'#ff0000\')" style="width:24px;height:24px;background:#ff0000;border:1px solid #ccc;border-radius:3px;cursor:pointer"></button><button onclick="VE.updateProp(\'color\',\'#ffff00\')" style="width:24px;height:24px;background:#ffff00;border:1px solid #ccc;border-radius:3px;cursor:pointer"></button><button onclick="VE.updateProp(\'color\',\'#0000ff\')" style="width:24px;height:24px;background:#0000ff;border:1px solid #ccc;border-radius:3px;cursor:pointer"></button><button onclick="VE.updateProp(\'color\',\'#00ff00\')" style="width:24px;height:24px;background:#00ff00;border:1px solid #ccc;border-radius:3px;cursor:pointer"></button><button onclick="VE.updateProp(\'color\',\'#ffffff\')" style="width:24px;height:24px;background:#ffffff;border:1px solid #ccc;border-radius:3px;cursor:pointer"></button></div></div>';
       h+='<div class="ve-pg"><div class="ve-pg-lbl">Background</div><div class="ve-pg-row"><div class="ve-pcol"><input type="color" value="'+(a.bgColor==='transparent'?'#ffffff':a.bgColor)+'" onchange="VE.updateProp(\'bgColor\',this.value)"></div><select class="ve-psel" onchange="VE.updateProp(\'bgColor\',this.value===\'none\'?\'transparent\':this.previousElementSibling.querySelector(\'input\').value)"><option value="none"'+(a.bgColor==='transparent'?' selected':'')+'>None</option><option value="color"'+(a.bgColor!=='transparent'?' selected':'')+'>Color</option></select></div></div>';
     }
     if(['rect','ellipse','line','arrow'].includes(a.type)){
@@ -2275,7 +2283,30 @@ const VE=(function(){
     veToast('Exporting PDF...');
     try{
       const doc=await PDFD.load(pdfBytes,{ignoreEncryption:true});
-      const helvetica=await doc.embedFont(SF.Helvetica);
+      const fontCache={};
+      async function getFont(fontFamily,fontWeight,fontStyle){
+        const key=fontFamily+'-'+fontWeight+'-'+fontStyle;
+        if(fontCache[key])return fontCache[key];
+        let stdFont=SF.Helvetica;
+        if(fontFamily.includes('Times')){
+          if(fontWeight==='bold'&&fontStyle==='italic')stdFont=SF.TimesRomanBoldItalic;
+          else if(fontWeight==='bold')stdFont=SF.TimesRomanBold;
+          else if(fontStyle==='italic')stdFont=SF.TimesRomanItalic;
+          else stdFont=SF.TimesRoman;
+        }else if(fontFamily.includes('Courier')){
+          if(fontWeight==='bold'&&fontStyle==='italic')stdFont=SF.CourierBoldOblique;
+          else if(fontWeight==='bold')stdFont=SF.CourierBold;
+          else if(fontStyle==='italic')stdFont=SF.CourierOblique;
+          else stdFont=SF.Courier;
+        }else{
+          if(fontWeight==='bold'&&fontStyle==='italic')stdFont=SF.HelveticaBoldOblique;
+          else if(fontWeight==='bold')stdFont=SF.HelveticaBold;
+          else if(fontStyle==='italic')stdFont=SF.HelveticaOblique;
+          else stdFont=SF.Helvetica;
+        }
+        fontCache[key]=await doc.embedFont(stdFont);
+        return fontCache[key];
+      }
       for(let pn=1;pn<=totalPages;pn++){
         const page=doc.getPage(pn-1);const{width:pw,height:ph}=page.getSize();
         const pdfPg=await pdfDoc.getPage(pn);const baseVP=pdfPg.getViewport({scale:1});
@@ -2285,7 +2316,8 @@ const VE=(function(){
           const ax=a.x*scaleX,ay=ph-a.y*scaleY-a.h*scaleY,aw=a.w*scaleX,ah=a.h*scaleY;
           if(a.type==='text'){
             const fs=a.fontSize*scaleY;const c=hexToRgbV(a.color);
-            page.drawText(a.text||'',{x:ax,y:ay+ah-fs*1.2,size:fs,font:helvetica,color:RGB(c.r/255,c.g/255,c.b/255),opacity:a.opacity});
+            const font=await getFont(a.fontFamily||"'Nunito Sans',sans-serif",a.fontWeight||'normal',a.fontStyle||'normal');
+            page.drawText(a.text||'',{x:ax,y:ay+ah-fs*1.2,size:fs,font:font,color:RGB(c.r/255,c.g/255,c.b/255),opacity:a.opacity});
           }else if(a.type==='image'&&a.imgSrc){
             try{const ib=await fetch(a.imgSrc).then(r=>r.arrayBuffer());let img;
               try{img=await doc.embedPng(ib)}catch{img=await doc.embedJpg(ib)}
