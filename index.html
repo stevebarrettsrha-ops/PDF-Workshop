@@ -1895,6 +1895,13 @@ async function doRedact(){
     <button class="ve-tb" data-tool="sign" onclick="VE.setTool('sign')">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"/></svg> Sign
     </button>
+    <div class="ve-sep"></div>
+    <button class="ve-tb" id="veUndoBtn" onclick="VE.undo()" title="Undo (Ctrl+Z)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg> Undo
+    </button>
+    <button class="ve-tb" id="veRedoBtn" onclick="VE.redo()" title="Redo (Ctrl+Y)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg> Redo
+    </button>
     <div class="ve-right">
       <button class="ve-back" onclick="VE.close()">Back to Workshop</button>
       <button class="ve-save" onclick="VE.exportPDF()">
@@ -1962,10 +1969,47 @@ const VE=(function(){
   let tool='select';
   let annots={},draws={};
   let selEl=null,dragSt=null,isDrawing=false,curDrawPath=null,nextId=1;
+  let history=[],historyIndex=-1,maxHistory=50;
 
   function veToast(msg){
     const t=document.getElementById('veToast');t.textContent=msg;t.classList.add('show');
     clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3000);
+  }
+
+  function saveHistory(){
+    const state={annots:JSON.parse(JSON.stringify(annots)),draws:JSON.parse(JSON.stringify(draws)),nextId};
+    if(historyIndex<history.length-1)history=history.slice(0,historyIndex+1);
+    history.push(state);
+    if(history.length>maxHistory)history.shift();else historyIndex++;
+    updateUndoRedoButtons();
+  }
+  function undo(){
+    if(historyIndex<=0)return;
+    historyIndex--;
+    const state=history[historyIndex];
+    annots=JSON.parse(JSON.stringify(state.annots));
+    draws=JSON.parse(JSON.stringify(state.draws));
+    nextId=state.nextId;
+    selEl=null;
+    renderAnnots();renderDrawPaths();updatePropsPanel();updateUndoRedoButtons();
+    veToast('Undo');
+  }
+  function redo(){
+    if(historyIndex>=history.length-1)return;
+    historyIndex++;
+    const state=history[historyIndex];
+    annots=JSON.parse(JSON.stringify(state.annots));
+    draws=JSON.parse(JSON.stringify(state.draws));
+    nextId=state.nextId;
+    selEl=null;
+    renderAnnots();renderDrawPaths();updatePropsPanel();updateUndoRedoButtons();
+    veToast('Redo');
+  }
+  function updateUndoRedoButtons(){
+    const undoBtn=document.getElementById('veUndoBtn');
+    const redoBtn=document.getElementById('veRedoBtn');
+    if(undoBtn)undoBtn.disabled=historyIndex<=0;
+    if(redoBtn)redoBtn.disabled=historyIndex>=history.length-1;
   }
 
   async function open(file){
@@ -1973,7 +2017,9 @@ const VE=(function(){
     pdfDoc=await pdfjsLib.getDocument({data:pdfBytes.slice(0)}).promise;
     totalPages=pdfDoc.numPages;curPage=1;zoom=1.0;
     annots={};draws={};selEl=null;nextId=1;
+    history=[];historyIndex=-1;
     for(let i=1;i<=totalPages;i++){annots[i]=[];draws[i]=[]}
+    saveHistory();
     document.getElementById('visualEditor').classList.add('open');
     document.body.style.overflow='hidden';
     await renderPage(curPage);
@@ -2054,11 +2100,11 @@ const VE=(function(){
       borderColor:props.borderColor||'#000000',borderWidth:props.borderWidth||2,
       opacity:props.opacity||1,imgSrc:props.imgSrc||null,rotation:0,
       fillColor:props.fillColor||(type==='highlight'?'#ffe066':'transparent')};
-    annots[curPage].push(a);renderAnnots();selectAnnot(id);return a;
+    annots[curPage].push(a);renderAnnots();selectAnnot(id);saveHistory();return a;
   }
   function removeAnnot(id){
     annots[curPage]=annots[curPage].filter(a=>a.id!==id);
-    if(selEl?.id===id)deselectAll();renderAnnots();
+    if(selEl?.id===id)deselectAll();renderAnnots();saveHistory();
   }
   function renderAnnots(){
     const layer=document.getElementById('veAnnotLayer');layer.innerHTML='';
@@ -2075,7 +2121,7 @@ const VE=(function(){
         te.style.fontSize=a.fontSize*zoom+'px';te.style.fontFamily=a.fontFamily;
         te.style.fontWeight=a.fontWeight||'normal';te.style.fontStyle=a.fontStyle||'normal';
         te.style.color=a.color;te.style.background=a.bgColor;te.textContent=a.text;
-        te.oninput=()=>{a.text=te.textContent};
+        te.oninput=()=>{a.text=te.textContent;clearTimeout(updatePropTimer);updatePropTimer=setTimeout(()=>saveHistory(),500)};
         te.onmousedown=e=>{if(tool==='select'){e.stopPropagation();selectAnnot(a.id)}};
         el.appendChild(te);
       }else if(a.type==='image'){
@@ -2126,7 +2172,7 @@ const VE=(function(){
       }
       renderAnnots();
     };
-    const onUp=()=>{dragSt=null;document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp)};
+    const onUp=()=>{dragSt=null;document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);saveHistory()};
     document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
   }
 
@@ -2167,7 +2213,7 @@ const VE=(function(){
       curDrawPath.points.forEach((p,i)=>{if(i===0)ctx.moveTo(p.x,p.y);else ctx.lineTo(p.x,p.y)});ctx.stroke();
     });
     const endDraw=()=>{if(!isDrawing)return;isDrawing=false;
-      if(curDrawPath&&curDrawPath.points.length>1){if(!draws[curPage])draws[curPage]=[];draws[curPage].push(curDrawPath)}
+      if(curDrawPath&&curDrawPath.points.length>1){if(!draws[curPage])draws[curPage]=[];draws[curPage].push(curDrawPath);saveHistory()}
       curDrawPath=null;renderDrawPaths()};
     dc.addEventListener('mouseup',endDraw);dc.addEventListener('mouseleave',endDraw);
   },0);
@@ -2248,17 +2294,22 @@ const VE=(function(){
     h+='<div class="ve-pg"><button class="ve-pbtn" onclick="VE.removeAnnot('+a.id+')">Delete Element</button></div>';
     body.innerHTML=h;
   }
-  function updateProp(key,val){if(!selEl)return;selEl[key]=val;renderAnnots();updatePropsPanel()}
+  let updatePropTimer=null;
+  function updateProp(key,val){
+    if(!selEl)return;selEl[key]=val;renderAnnots();updatePropsPanel();
+    clearTimeout(updatePropTimer);
+    updatePropTimer=setTimeout(()=>saveHistory(),500);
+  }
   function moveLayer(dir){
     if(!selEl)return;const arr=annots[curPage];const idx=arr.findIndex(a=>a.id===selEl.id);if(idx===-1)return;
     if(dir==='up'&&idx<arr.length-1)[arr[idx],arr[idx+1]]=[arr[idx+1],arr[idx]];
     if(dir==='down'&&idx>0)[arr[idx],arr[idx-1]]=[arr[idx-1],arr[idx]];
     if(dir==='top')arr.push(arr.splice(idx,1)[0]);
     if(dir==='bottom')arr.unshift(arr.splice(idx,1)[0]);
-    renderAnnots();
+    renderAnnots();saveHistory();
   }
-  function undoLastDraw(){if(draws[curPage]?.length){draws[curPage].pop();renderDrawPaths()}}
-  function clearAllDrawings(){draws[curPage]=[];renderDrawPaths()}
+  function undoLastDraw(){if(draws[curPage]?.length){draws[curPage].pop();renderDrawPaths();saveHistory()}}
+  function clearAllDrawings(){draws[curPage]=[];renderDrawPaths();saveHistory()}
 
   // ---- ELEMENTS LIST ----
   function updateElemList(){
@@ -2365,9 +2416,19 @@ const VE=(function(){
     }catch(err){console.error(err);veToast('Export failed: '+err.message)}
   }
 
+  // ---- KEYBOARD SHORTCUTS ----
+  document.addEventListener('keydown',e=>{
+    const ve=document.getElementById('visualEditor');
+    if(!ve||!ve.classList.contains('open'))return;
+    if(e.ctrlKey||e.metaKey){
+      if(e.key==='z'&&!e.shiftKey){e.preventDefault();undo()}
+      else if(e.key==='y'||(e.key==='z'&&e.shiftKey)){e.preventDefault();redo()}
+    }
+  });
+
   return{open,close,setTool,triggerImageUpload,addImage,prevPage,nextPage,zoomIn,zoomOut,zoomFit,
     exportPDF,selectAnnot,removeAnnot,updateProp,moveLayer,undoLastDraw,clearAllDrawings,
-    openSigModal,closeSigModal,clearSigCanvas,applySig};
+    openSigModal,closeSigModal,clearSigCanvas,applySig,undo,redo};
 })();
 </script>
 </body>
