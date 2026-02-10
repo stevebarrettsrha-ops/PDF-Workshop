@@ -287,7 +287,7 @@ canvas.ve-draw.active{display:block;pointer-events:all;cursor:crosshair}
 
 <header class="header">
   <div class="header-inner">
-    <a class="logo" href="#"><div class="logo-mark">PDF</div><div class="logo-name">Workshop<span>.</span></div></a>
+    <a class="logo" href="#" onclick="goHome();return false;"><div class="logo-mark">PDF</div><div class="logo-name">Workshop<span>.</span></div></a>
     <div class="search-input">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
       <input type="text" placeholder="Search tools…" oninput="filterBySearch(this.value)">
@@ -428,6 +428,10 @@ function openTool(id){
 function closeModal(){
   document.getElementById('overlay').classList.remove('open');
   document.body.style.overflow='';
+}
+function goHome(){
+  closeModal();
+  if(window.VE&&VE.close)VE.close();
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 
