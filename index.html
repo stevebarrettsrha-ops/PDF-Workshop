@@ -2089,14 +2089,18 @@ const VE=(function(){
         el.style.background=a.fillColor;el.style.opacity=a.opacity||.35;
       }
       if(a.type!=='highlight'){
-        el.innerHTML+='<div class="ve-rh ve-rh-br"></div><div class="ve-rh ve-rh-bl"></div><div class="ve-rh ve-rh-tr"></div><div class="ve-rh ve-rh-tl"></div>';
+        el.insertAdjacentHTML('beforeend','<div class="ve-rh ve-rh-br"></div><div class="ve-rh ve-rh-bl"></div><div class="ve-rh ve-rh-tr"></div><div class="ve-rh ve-rh-tl"></div>');
       }
       el.onmousedown=e=>onAnnotMouseDown(e,a);
       layer.appendChild(el);
     });
     updateElemList();
   }
-  function selectAnnot(id){selEl=annots[curPage]?.find(a=>a.id===id)||null;renderAnnots();updatePropsPanel()}
+  function selectAnnot(id){
+    const newSel=annots[curPage]?.find(a=>a.id===id)||null;
+    if(selEl?.id===id)return;
+    selEl=newSel;renderAnnots();updatePropsPanel();
+  }
   function deselectAll(){selEl=null;renderAnnots();updatePropsPanel()}
 
   function onAnnotMouseDown(e,a){
