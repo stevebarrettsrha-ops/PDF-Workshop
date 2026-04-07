@@ -935,7 +935,7 @@ function showDone(info,filename){
   const r=document.getElementById('resArea');r.classList.add('show');
   document.getElementById('resTitle').textContent='Complete!';
   document.getElementById('resInfo').textContent=info;
-  document.getElementById('resButtons').innerHTML=`<button class="dl-btn" onclick="dlResult('${filename}')">⬇ Download ${filename}</button>`;
+  document.getElementById('resButtons').innerHTML=`<button class="dl-btn" onclick="dlResult('${escHtml(filename)}')">⬇ Download ${escHtml(filename)}</button>`;
   document.getElementById('resExtra').innerHTML=`<div style="margin-top:12px"><button class="act-sec" onclick="resetTool()">⟳ Process Another File</button></div>`;
   toast('✅ '+curTool.name+' done!');
 }
@@ -946,7 +946,7 @@ function showDoneMulti(info){
   document.getElementById('resInfo').textContent=info;
   let btns='';
   if(resultBlobs?.length){
-    if(resultBlobs.length<=8)btns=resultBlobs.map((b,i)=>`<button class="dl-btn" onclick="dlMulti(${i})">⬇ ${b.name}</button>`).join('');
+    if(resultBlobs.length<=8)btns=resultBlobs.map((b,i)=>`<button class="dl-btn" onclick="dlMulti(${i})">⬇ ${escHtml(b.name)}</button>`).join('');
     btns+=`<div style="margin-top:8px"><button class="dl-btn" onclick="dlZip()">📦 Download All as ZIP</button></div>`;
   }
   document.getElementById('resButtons').innerHTML=btns;
@@ -958,7 +958,7 @@ function showDoneText(info,text,filename){
   const r=document.getElementById('resArea');r.classList.add('show');
   document.getElementById('resTitle').textContent='Complete!';
   document.getElementById('resInfo').textContent=info;
-  document.getElementById('resButtons').innerHTML=`<button class="dl-btn" onclick="dlTextFile()">⬇ Download ${filename}</button> <button class="act-sec" onclick="copyExtracted()">📋 Copy</button>`;
+  document.getElementById('resButtons').innerHTML=`<button class="dl-btn" onclick="dlTextFile()">⬇ Download ${escHtml(filename)}</button> <button class="act-sec" onclick="copyExtracted()">📋 Copy</button>`;
   document.getElementById('resExtra').innerHTML=`<div class="ocr-result" id="extractedText">${escHtml(text)}</div>`;
   window._extractedText=text;window._extractedFn=filename;
 }
@@ -2023,7 +2023,7 @@ const VE=(function(){
     document.getElementById('visualEditor').classList.add('open');
     document.body.style.overflow='hidden';
     await renderPage(curPage);
-    renderThumbnails();
+    await renderThumbnails();
     updatePageInfo();
     setTool('select');
     veToast('PDF loaded — '+totalPages+' page'+(totalPages>1?'s':''));
@@ -2061,19 +2061,19 @@ const VE=(function(){
       w.onclick=()=>goToPage(i);c.appendChild(w);
     }
   }
-  function goToPage(n){if(n<1||n>totalPages||n===curPage)return;curPage=n;renderPage(n);updatePageInfo();updateThumbActive();deselectAll()}
+  async function goToPage(n){if(n<1||n>totalPages||n===curPage)return;curPage=n;await renderPage(n);updatePageInfo();updateThumbActive();deselectAll()}
   function prevPage(){goToPage(curPage-1)}
   function nextPage(){goToPage(curPage+1)}
   function updatePageInfo(){document.getElementById('vePageInfo').textContent='Page '+curPage+' / '+totalPages}
   function updateThumbActive(){document.querySelectorAll('.ve-pg-thumb').forEach(w=>w.classList.toggle('active',+w.dataset.page===curPage))}
-  function zoomIn(){zoom=Math.min(zoom+.2,4);renderPage(curPage);document.getElementById('veZoomText').textContent=Math.round(zoom*100)+'%'}
-  function zoomOut(){zoom=Math.max(zoom-.2,.3);renderPage(curPage);document.getElementById('veZoomText').textContent=Math.round(zoom*100)+'%'}
-  function zoomFit(){
+  async function zoomIn(){zoom=Math.min(zoom+.2,4);await renderPage(curPage);document.getElementById('veZoomText').textContent=Math.round(zoom*100)+'%'}
+  async function zoomOut(){zoom=Math.max(zoom-.2,.3);await renderPage(curPage);document.getElementById('veZoomText').textContent=Math.round(zoom*100)+'%'}
+  async function zoomFit(){
     const area=document.getElementById('veCanvasArea');
     const cv=document.getElementById('vePdfCanvas');
     const sw=(area.clientWidth-48)/((cv.width||600)/1.5);
     const sh=(area.clientHeight-48)/((cv.height||800)/1.5);
-    zoom=Math.min(sw,sh,2);renderPage(curPage);
+    zoom=Math.min(sw,sh,2);await renderPage(curPage);
     document.getElementById('veZoomText').textContent=Math.round(zoom*100)+'%';
   }
 
@@ -2327,7 +2327,6 @@ const VE=(function(){
     if(e.target.contentEditable==='true'||e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
     if(e.key==='Delete'||e.key==='Backspace'){if(selEl){e.preventDefault();removeAnnot(selEl.id)}}
     if(e.key==='Escape'){e.preventDefault();deselectAll()}
-    if(e.ctrlKey&&e.key==='z'){e.preventDefault();undoLastDraw()}
     if(e.key==='t')setTool('text');if(e.key==='v')setTool('select');
     if(e.key==='d')setTool('draw');if(e.key==='r')setTool('rect');
   });
@@ -2428,7 +2427,7 @@ const VE=(function(){
 
   return{open,close,setTool,triggerImageUpload,addImage,prevPage,nextPage,zoomIn,zoomOut,zoomFit,
     exportPDF,selectAnnot,removeAnnot,updateProp,moveLayer,undoLastDraw,clearAllDrawings,
-    openSigModal,closeSigModal,clearSigCanvas,applySig,undo,redo};
+    openSigModal,closeSigModal,clearSigCanvas,applySig,undo,redo,get selEl(){return selEl}};
 })();
 </script>
 </body>
