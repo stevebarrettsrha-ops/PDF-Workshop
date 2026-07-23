@@ -450,14 +450,21 @@ function buildModal(){
   const acc=t.accept||'.pdf', mul=t.multi?'multiple':'';
   let uploadHTML='';
   if(!t.noUpload){
+    const folderHTML=t.multi?`
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:.6rem">
+        <span style="font-size:.72rem;color:var(--text3);font-weight:600">or</span>
+        <button class="opt-btn" onclick="document.getElementById('folderInput').click()">📁 Upload Folder</button>
+        <input type="file" id="folderInput" webkitdirectory multiple style="display:none" onchange="handleFolderInput(this.files);this.value=''">
+      </div>`:'';
     uploadHTML=`
       <div class="dropzone" id="dz" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleDrop(event)">
         <input type="file" accept="${acc}" ${mul} onchange="handleInput(this.files)">
         <div class="dz-icon">📂</div>
-        <h4>Drop your file${t.multi?'s':''} here</h4>
-        <p>Accepts: ${acc}</p>
+        <h4>Drop your file${t.multi?'s or a folder':''} here</h4>
+        <p>Accepts: ${acc}${t.multi?' — folders are scanned for matching files':''}</p>
         <div class="dz-btn">Browse Files</div>
       </div>
+      ${folderHTML}
       <div class="file-list" id="flist"></div>`;
   }
   mb.innerHTML=`
@@ -788,8 +795,60 @@ function toRoman(n){const vals=[1000,900,500,400,100,90,50,40,10,9,5,4,1];const 
 // ====================================================================
 // FILE HANDLING
 // ====================================================================
-function handleDrop(e){e.preventDefault();e.target.closest('.dropzone')?.classList.remove('over');addFiles(e.dataTransfer.files)}
+async function handleDrop(e){
+  e.preventDefault();e.target.closest('.dropzone')?.classList.remove('over');
+  // Grab entries synchronously — dataTransfer.items is only valid during the event
+  const entries=e.dataTransfer.items?[...e.dataTransfer.items].map(i=>i.webkitGetAsEntry?.()).filter(Boolean):[];
+  if(entries.some(en=>en.isDirectory)){
+    if(!curTool.multi){toast('⚠ Folder upload is only supported for multi-file tools like Merge');return}
+    const out=[];
+    try{for(const en of entries)await collectFromEntry(en,out)}
+    catch(err){console.warn('Folder read error:',err)}
+    addFolderFiles(out);
+    return;
+  }
+  addFiles(e.dataTransfer.files);
+}
 function handleInput(fl){addFiles(fl)}
+function handleFolderInput(fl){
+  addFolderFiles([...fl].map(f=>({file:f,path:f.webkitRelativePath||f.name})));
+}
+// Recursively walk a dropped directory entry, collecting {file, path} pairs
+function readAllEntries(reader){
+  return new Promise((res,rej)=>{
+    const out=[];
+    const next=()=>reader.readEntries(es=>{if(!es.length)return res(out);out.push(...es);next()},rej);
+    next();
+  });
+}
+async function collectFromEntry(entry,out){
+  if(entry.isFile){
+    const f=await new Promise((res,rej)=>entry.file(res,rej));
+    out.push({file:f,path:entry.fullPath||f.name});
+  }else if(entry.isDirectory){
+    const es=await readAllEntries(entry.createReader());
+    for(const en of es)await collectFromEntry(en,out);
+  }
+}
+function matchesAccept(f,acc){
+  if(!acc)return true;
+  return acc.split(',').some(a=>{
+    a=a.trim().toLowerCase();
+    if(a==='image/*')return f.type.startsWith('image/');
+    if(a.startsWith('.'))return f.name.toLowerCase().endsWith(a);
+    return f.type===a;
+  });
+}
+function addFolderFiles(list){
+  if(!curTool.multi){toast('⚠ Folder upload is only supported for multi-file tools like Merge');return}
+  list=list.filter(x=>!x.file.name.startsWith('.'));
+  const matched=list.filter(x=>matchesAccept(x.file,curTool.accept||'.pdf'));
+  const skipped=list.length-matched.length;
+  if(!matched.length){toast(`⚠ No ${curTool.accept||'.pdf'} files found in folder`);return}
+  matched.sort((a,b)=>a.path.localeCompare(b.path,undefined,{numeric:true,sensitivity:'base'}));
+  addFiles(matched.map(x=>x.file));
+  toast(`📁 Added ${matched.length} file${matched.length>1?'s':''} from folder${skipped?` (skipped ${skipped} non-matching)`:''}`);
+}
 const MAX_FILE_SIZE=100*1024*1024; // 100 MB per file
 async function addFiles(fl){
   for(const f of fl){
